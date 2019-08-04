@@ -29,21 +29,25 @@ def load_dataset(data_dir, img_size):
 	global test_set
 	imgs = []
 	img_files = os.listdir(data_dir)
+	print(img_files)
 	for img in img_files:
 		try:
 			tmp= scipy.misc.imread(data_dir+"/"+img)
 			x,y,z = tmp.shape
-			coords_x = x / img_size
-			coords_y = y/img_size
+			coords_x = x // img_size
+			coords_y = y // img_size
+			print(coords_y)
 			coords = [ (q,r) for q in range(coords_x) for r in range(coords_y) ]
+
 			for coord in coords:
 				imgs.append((data_dir+"/"+img,coord))
 		except:
-			print "oops"
+			print("oops")
 	test_size = min(10,int( len(imgs)*0.2))
 	random.shuffle(imgs)
 	test_set = imgs[:test_size]
 	train_set = imgs[test_size:][:200]
+	print(train_set)
 	return
 
 """
@@ -99,7 +103,7 @@ def get_batch(batch_size,original_size,shrunk_size):
 			x_img = scipy.misc.imresize(img,(shrunk_size,shrunk_size))
 			x.append(x_img)
 			y.append(img)"""
-	max_counter = len(train_set)/batch_size
+	max_counter = len(train_set)//batch_size
 	counter = batch_index % max_counter
 	window = [x for x in range(counter*batch_size,(counter+1)*batch_size)]
 	imgs = [train_set[q] for q in window]

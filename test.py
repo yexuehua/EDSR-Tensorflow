@@ -1,8 +1,12 @@
 from model import EDSR
 import scipy.misc
+import numpy as np
 import argparse
 import data
 import os
+import pydicom
+import cv2
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--dataset",default="data/General-100")
 parser.add_argument("--imgsize",default=100,type=int)
@@ -21,12 +25,28 @@ if not os.path.exists(args.outdir):
 down_size = args.imgsize//args.scale
 network = EDSR(down_size,args.layers,args.featuresize,scale=args.scale)
 network.resume(args.savedir)
+# if args.image:
+# 	x = scipy.misc.imread(args.image)
+# else:
+# 	print("No image argument given")
+
+#x = scipy.misc.imread("lungCT.bmp")
+#print(x.shape)
+x = pydicom.read_file('16.DCM')
+inputs = x.pixel_array
+inputs = cv2.cvtColor(inputs,cv2.COLOR_GRAY2BGR)
+outputs = network.predict(inputs)
+#print(outputs.shape)
+# outputs = np.resize(inputs,[3,256*2,224*2])
+# outputs = outputs[0]
+# outputs.astype(int)
+#x.PixelData = outputs.tobytes()
+#x.Rows,x.Columns = outputs.shape
+#print(x.pixel_array.shape)
+#x.save_as('out_16.DCM')
 if args.image:
-	x = scipy.misc.imread(args.image)
-else:
-	print("No image argument given")
-inputs = x
-outputs = network.predict(x)
-if args.image:
-	scipy.misc.imsave(args.outdir+"/input_"+args.image,inputs)
-	scipy.misc.imsave(args.outdir+"/output_"+args.image,outputs)
+	scipy.misc.imsave('in16.bmp',inputs)
+	scipy.misc.imsave('out16.bmp',outputs)
+
+scipy.misc.imsave('in16.bmp',inputs)
+scipy.misc.imsave('out16.bmp',outputs)
