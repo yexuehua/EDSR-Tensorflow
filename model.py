@@ -1,5 +1,5 @@
 import tensorflow.contrib.slim as slim
-import scipy.misc
+from scipy import misc
 import tensorflow as tf
 from tqdm import tqdm
 import numpy as np
@@ -18,16 +18,18 @@ super-resolution of images as described in:
 """
 class EDSR(object):
 
-	def __init__(self,img_size=32,num_layers=32,feature_size=256,scale=2,output_channels=3):
+	def __init__(self,img_size=32,num_layers=32,feature_size=256,scale=2,output_channels=1):
 		print("Building EDSR...")
 		self.img_size = img_size
 		self.scale = scale
 		self.output_channels = output_channels
 
 		#Placeholder for image inputs
-		self.input = x = tf.placeholder(tf.float32,[None,img_size,img_size,output_channels])
+		self.input = x = tf.placeholder(tf.float32,[None,None,None,output_channels])
+		#self.input = x = tf.placeholder(tf.float32,[None,img_size,img_size])
 		#Placeholder for upscaled image ground-truth
-		self.target = y = tf.placeholder(tf.float32,[None,img_size*scale,img_size*scale,output_channels])
+		self.target = y = tf.placeholder(tf.float32,[None,None,None,output_channels])
+		#self.target = y = tf.placeholder(tf.float32,[None,img_size*scale,img_size*scale])
 	
 		"""
 		Preprocessing as mentioned in the paper, by subtracting the mean
@@ -86,14 +88,14 @@ class EDSR(object):
 		#One more convolution, and then we add the output of our first conv layer
 		x = slim.conv2d(x,feature_size,[3,3])
 		x += conv_1
-		
+		print('here')
 		#Upsample output of the convolution		
 		x = utils.upsample(x,scale,feature_size,None)
 
 		#One final convolution on the upsampling output
-		output = x#slim.conv2d(x,output_channels,[3,3])
+		output = x[:,:,:,0]#slim.conv2d(x,output_channels,[3,3])
+		output = tf.expand_dims(output,axis=3)
 		self.out = tf.clip_by_value(output+mean_x,0.0,255.0)
-
 		self.loss = loss = tf.reduce_mean(tf.losses.absolute_difference(image_target,output))
 	
 		#Calculating Peak Signal-to-noise-ratio
@@ -153,6 +155,12 @@ class EDSR(object):
 			for i in range(num_across):
 				for j in range(num_down):
 					tmp = self.sess.run(self.out,feed_dict={self.input:[x[i*self.img_size:(i+1)*self.img_size,j*self.img_size:(j+1)*self.img_size]]})[0]
+					misc.imsave('patch/d'+str(i)+str(j)+'smal.jpg',tmp[:,:,0])
+					tmp[0,1:-1] = tmp[0,1:-1]*0.2+tmp[1,1:-1]*0.8
+					tmp[-1,1:-1] = tmp[-2,1:-1]*0.8+tmp[-1,1:-1]*0.2
+					tmp[1:-1,0] = tmp[1:-1,1]*0.8+tmp[1:-1,0]*0.2
+					tmp[1:-1,-1] = tmp[1:-1,-2]*0.8+tmp[1:-1,-1]*0.2
+					misc.imsave('patch/d'+str(i)+str(j)+'chsmal.jpg',tmp[:,:,0])
 					tmp_image[i*tmp.shape[0]:(i+1)*tmp.shape[0],j*tmp.shape[1]:(j+1)*tmp.shape[1]] = tmp
 			#this added section fixes bottom right corner when testing
 			if (x.shape[0]%self.img_size != 0 and  x.shape[1]%self.img_size != 0):
@@ -162,10 +170,18 @@ class EDSR(object):
 			if x.shape[0]%self.img_size != 0:
 				for j in range(num_down):
 					tmp = self.sess.run(self.out,feed_dict={self.input:[x[-1*self.img_size:,j*self.img_size:(j+1)*self.img_size]]})[0]
+					tmp[0,1:-1] = tmp[0,1:-1]*0.2+tmp[1,1:-1]*0.8
+					tmp[-1,1:-1] = tmp[-2,1:-1]*0.8+tmp[-1,1:-1]*0.2
+					tmp[1:-1,0] = tmp[1:-1,1]*0.8+tmp[1:-1,0]*0.2
+					tmp[1:-1,-1] = tmp[1:-1,-2]*0.8+tmp[1:-1,-1]*0.2
 					tmp_image[-1*tmp.shape[0]:,j*tmp.shape[1]:(j+1)*tmp.shape[1]] = tmp
 			if x.shape[1]%self.img_size != 0:
 				for j in range(num_across):
 					tmp = self.sess.run(self.out,feed_dict={self.input:[x[j*self.img_size:(j+1)*self.img_size,-1*self.img_size:]]})[0]
+					tmp[0,1:-1] = tmp[0,1:-1]*0.2+tmp[1,1:-1]*0.8
+					tmp[-1,1:-1] = tmp[-2,1:-1]*0.8+tmp[-1,1:-1]*0.2
+					tmp[1:-1,0] = tmp[1:-1,1]*0.8+tmp[1:-1,0]*0.2
+					tmp[1:-1,-1] = tmp[1:-1,-2]*0.8+tmp[1:-1,-1]*0.2
 					tmp_image[j*tmp.shape[0]:(j+1)*tmp.shape[0],-1*tmp.shape[1]:] = tmp
 			return tmp_image
 		else:

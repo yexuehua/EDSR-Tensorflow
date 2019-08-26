@@ -1,8 +1,10 @@
 import scipy.misc
+import cv2
+import imageio
 import random
 import numpy as np
 import os
-
+import pydicom
 train_set = []
 test_set = []
 batch_index = 0
@@ -14,6 +16,16 @@ random 20% of the images as a test set
 
 data_dir: path to directory containing images
 """
+def normal(pixels):
+	high,wid = pixels.shape
+	min = np.min(pixels)
+	max = np.max(pixels)
+	for i in range(high):
+		for j in range(wid):
+			pixels[i][j] = int((pixels[i][j]-min)*(256/(max-min)))
+	return pixels
+
+
 def load_dataset(data_dir, img_size):
 	"""img_files = os.listdir(data_dir)
 	test_size = int(len(img_files)*0.2)
@@ -29,25 +41,26 @@ def load_dataset(data_dir, img_size):
 	global test_set
 	imgs = []
 	img_files = os.listdir(data_dir)
-	print(img_files)
 	for img in img_files:
 		try:
-			tmp= scipy.misc.imread(data_dir+"/"+img)
-			x,y,z = tmp.shape
+			path = os.path.join(data_dir,img)
+			tmp= pydicom.read_file(path)
+			x = tmp.Rows
+			y = tmp.Columns
+			#tmp = cv2.imread(path)
+			#x,y,z = tmp.shape
 			coords_x = x // img_size
 			coords_y = y // img_size
-			print(coords_y)
 			coords = [ (q,r) for q in range(coords_x) for r in range(coords_y) ]
 
 			for coord in coords:
-				imgs.append((data_dir+"/"+img,coord))
+				imgs.append((path,coord))
 		except:
 			print("oops")
-	test_size = min(10,int( len(imgs)*0.2))
+	test_size = int(len(imgs)*0.2)
 	random.shuffle(imgs)
 	test_set = imgs[:test_size]
-	train_set = imgs[test_size:][:200]
-	print(train_set)
+	train_set = imgs[test_size:]
 	return
 
 """
@@ -67,14 +80,22 @@ def get_test_set(original_size,shrunk_size):
 			x_img = scipy.misc.imresize(img,(shrunk_size,shrunk_size))
 			y_imgs.append(img)
 			x_imgs.append(x_img)"""
-	imgs = test_set
+	#random.shuffle(test_set)
+	imgs = test_set[:200]
 	get_image(imgs[0],original_size)
-	x = [scipy.misc.imresize(get_image(q,original_size),(shrunk_size,shrunk_size)) for q in imgs]#scipy.misc.imread(q[0])[q[1][0]*original_size:(q[1][0]+1)*original_size,q[1][1]*original_size:(q[1][1]+1)*original_size].resize(shrunk_size,shrunk_size) for q in imgs]
+	x = [cv2.resize(get_image(q,original_size),(shrunk_size,shrunk_size),interpolation=cv2.INTER_CUBIC) for q in imgs]#scipy.misc.imread(q[0])[q[1][0]*original_size:(q[1][0]+1)*original_size,q[1][1]*original_size:(q[1][1]+1)*original_size].resize(shrunk_size,shrunk_size) for q in imgs]
+	x = np.expand_dims(x,axis=3)
 	y = [get_image(q,original_size) for q in imgs]#scipy.misc.imread(q[0])[q[1][0]*original_size:(q[1][0]+1)*original_size,q[1][1]*original_size:(q[1][1]+1)*original_size] for q in imgs]
+	#y = np.expand_dims(y,axis=3)
 	return x,y
 
 def get_image(imgtuple,size):
-	img = scipy.misc.imread(imgtuple[0])
+	tmp = pydicom.read_file(imgtuple[0])
+	#img = cv2.imread(imgtuple[0])
+	img = tmp.pixel_array
+	img = normal(img)
+	img = np.expand_dims(img, axis=2)
+	#img = np.concatenate((img, img, img), axis=-1)
 	x,y = imgtuple[1]
 	img = img[x*size:(x+1)*size,y*size:(y+1)*size]
 	return img
@@ -103,12 +124,18 @@ def get_batch(batch_size,original_size,shrunk_size):
 			x_img = scipy.misc.imresize(img,(shrunk_size,shrunk_size))
 			x.append(x_img)
 			y.append(img)"""
-	max_counter = len(train_set)//batch_size
+	#random.shuffle(train_set)
+	sub_train_set = train_set[:1000]
+	max_counter = len(sub_train_set)//batch_size
 	counter = batch_index % max_counter
 	window = [x for x in range(counter*batch_size,(counter+1)*batch_size)]
-	imgs = [train_set[q] for q in window]
-	x = [scipy.misc.imresize(get_image(q,original_size),(shrunk_size,shrunk_size)) for q in imgs]#scipy.misc.imread(q[0])[q[1][0]*original_size:(q[1][0]+1)*original_size,q[1][1]*original_size:(q[1][1]+1)*original_size].resize(shrunk_size,shrunk_size) for q in imgs]
+	imgs = [sub_train_set[q] for q in window]
+
+	x = [cv2.resize(get_image(q,original_size),(shrunk_size,shrunk_size),interpolation=cv2.INTER_CUBIC) for q in imgs]#scipy.misc.imread(q[0])[q[1][0]*original_size:(q[1][0]+1)*original_size,q[1][1]*original_size:(q[1][1]+1)*original_size].resize(shrunk_size,shrunk_size) for q in imgs]
+	x = np.expand_dims(x,axis=3)
+	print(x.shape)
 	y = [get_image(q,original_size) for q in imgs]#scipy.misc.imread(q[0])[q[1][0]*original_size:(q[1][0]+1)*original_size,q[1][1]*original_size:(q[1][1]+1)*original_size] for q in imgs]
+	#y = np.expand_dims(y,axis=3)
 	batch_index = (batch_index+1)%max_counter
 	return x,y
 
@@ -121,7 +148,7 @@ cropy: height of crop
 returns cropped image
 """
 def crop_center(img,cropx,cropy):
-	y,x,_ = img.shape
+	y,x,z_ = img.shape
 	startx = random.sample(range(x-cropx-1),1)[0]#x//2-(cropx//2)
 	starty = random.sample(range(y-cropy-1),1)[0]#y//2-(cropy//2)
 	return img[starty:starty+cropy,startx:startx+cropx]
